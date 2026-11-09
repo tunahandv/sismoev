@@ -1,0 +1,26 @@
+# Secrets — never commit
+.env
+firmware/**/secrets.h
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Data and logs
+*.db
+*.sqlite
+*.log
+
+# Build output
+build/
+.pio/
+app/build/
+app/.dart_tool/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
