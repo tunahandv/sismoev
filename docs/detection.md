@@ -13,7 +13,10 @@ Each shaking event passes three checks:
 1. **Trigger (STA/LTA):** 0.5 s average shaking vs 10 s average; ratio above ~3 starts an event.
 2. **Duration and frequency:** an earthquake is a back-and-forth motion at roughly 1–10 Hz lasting
    at least ~1.5 s. A knock is a single sharp spike lasting 0.1–0.3 s and is labelled **FAKE**.
-3. **2-of-3 vote:** at least two sensors must agree.
+3. **Vote:** the two accelerometers must agree. The SW-18020P is a bonus vote: in tests on the
+   breadboard it only fires on sharp, sudden motion and misses gentle shaking, so the decision
+   never depends on it alone. Its contacts also bounce (hundreds of hits within a few ms), so
+   only whether it fired during the event is used, not the hit count.
 
 Passing all three → **EARTHQUAKE** (relay cuts power, siren, red LED). Severity (LIGHT / STRONG)
 comes from the peak amplitude. AFAD is then queried; in the demo the expected label is
