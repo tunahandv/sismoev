@@ -18,7 +18,7 @@ import requests
 API = "https://servisnet.afad.gov.tr/apigateway/deprem/apiv2/event/filter"
 HOME_LAT = float(os.getenv("HOME_LAT", "38.49"))
 HOME_LON = float(os.getenv("HOME_LON", "27.70"))
-RADIUS_KM = float(os.getenv("AFAD_RADIUS_KM", "200"))
+RADIUS_KM = float(os.getenv("AFAD_RADIUS_KM", "600"))  # search radius; felt_radius_km() filters
 TR = timezone(timedelta(hours=3))  # AFAD times are Turkey local time
 
 
@@ -28,6 +28,23 @@ def distance_km(lat1, lon1, lat2, lon2):
     dp, dl = p2 - p1, math.radians(lon2 - lon1)
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
     return 2 * r * math.asin(math.sqrt(a))
+
+
+def felt_radius_km(mag):
+    """Rough distance up to which a quake of this magnitude is felt indoors.
+
+    Small quakes are felt only nearby, big ones hundreds of km away. A quake
+    outside this radius cannot explain the shaking measured at home.
+    """
+    if mag < 3:
+        return 30
+    if mag < 4:
+        return 80
+    if mag < 5:
+        return 150
+    if mag < 6:
+        return 300
+    return 600
 
 
 def fetch_events(start, end, radius_km=RADIUS_KM, min_mag=None):
@@ -71,8 +88,10 @@ def verify(detected_at, before_min=2, after_min=8):
     """
     events = fetch_events(detected_at - timedelta(minutes=before_min),
                           detected_at + timedelta(minutes=after_min))
-    if not events:
+    felt = [e for e in events if e["distance_km"] <= felt_radius_km(e["magnitude"])]
+    if not felt:
         return None
+    events = felt
     # Stronger and closer quakes are felt more; pick the one most likely felt at home.
     return max(events, key=lambda e: e["magnitude"] - e["distance_km"] / 100)
 
@@ -83,5 +102,6 @@ if __name__ == "__main__":
     events = fetch_events(now - timedelta(hours=hours), now)
     print(f"{len(events)} event(s) within {RADIUS_KM:.0f} km of home in the last {hours:g} h")
     for e in events:
-        print(f"{e['time']}  M{e['magnitude']:.1f}  {e['depth_km']:.0f} km deep  "
+        felt = "felt at home" if e["distance_km"] <= felt_radius_km(e["magnitude"]) else "too far to feel"
+        print(f"[{felt}] {e['time']}  M{e['magnitude']:.1f}  {e['depth_km']:.0f} km deep  "
               f"{e['distance_km']:.0f} km away  {e['place']}")
