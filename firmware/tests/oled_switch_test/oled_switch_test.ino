@@ -2,7 +2,7 @@
 // Wiring: 3V3 bus row 48, SDA bus row 49 (GPIO21), SCL bus row 50 (GPIO22).
 // OLED VCC->3V3 bus, GND->GND, SDA->row 49, SCL->row 50.
 // SW-18020P: one leg -> GPIO18, other leg -> GND (INPUT_PULLUP).
-// Serial Monitor 115200: lists I2C devices, then counts switch hits.
+// Serial Monitor 115200: lists I2C devices, then reports each shake/knock as a separate event.
 
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -43,13 +43,31 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(SW), onHit, CHANGE);
 }
 
-void loop() {
-  static unsigned long shown = 0;
-  bool active = millis() - lastHitMs < 300;
+// An "event" starts with the first hit and ends after 400 ms without hits.
+// Each event is reported separately: how many hits and how long it lasted.
+const unsigned long QUIET_MS = 400;
+unsigned long eventNo = 0, eventStartMs = 0, eventStartHits = 0;
+bool inEvent = false;
+String lastLine = "bekleniyor";
 
-  if (hits != shown) {
-    shown = hits;
-    Serial.printf("Switch hits: %lu\n", shown);
+void loop() {
+  noInterrupts();
+  unsigned long h = hits, lastMs = lastHitMs;
+  interrupts();
+  unsigned long now = millis();
+
+  if (!inEvent && h > eventStartHits) {
+    inEvent = true;
+    eventStartMs = lastMs;
+  }
+  if (inEvent && now - lastMs > QUIET_MS) {
+    inEvent = false;
+    eventNo++;
+    unsigned long n = h - eventStartHits;
+    unsigned long dur = lastMs - eventStartMs;
+    eventStartHits = h;
+    Serial.printf("Olay %lu: %lu vurus, %lu ms\n", eventNo, n, dur);
+    lastLine = "#" + String(eventNo) + ": " + String(n) + " vurus " + String(dur) + "ms";
   }
 
   if (oledOk) {
@@ -60,10 +78,10 @@ void loop() {
     oled.println("SismoEv");
     oled.setTextSize(1);
     oled.setCursor(0, 24);
-    oled.printf("Yay anahtar: %lu", shown);
+    oled.println(inEvent ? ">> TITRESIM <<" : "sakin");
     oled.setCursor(0, 40);
-    oled.println(active ? ">> TITRESIM <<" : "sakin");
+    oled.println(lastLine);
     oled.display();
   }
-  delay(50);
+  delay(20);
 }
