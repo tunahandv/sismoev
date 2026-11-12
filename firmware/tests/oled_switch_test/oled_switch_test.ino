@@ -40,6 +40,7 @@ void setup() {
   Serial.println(oledOk ? "OLED OK" : "OLED NOT FOUND (check wires / address)");
 
   pinMode(SW, INPUT_PULLUP);
+  Serial.printf("Switch pin now reads %s (HIGH = open, normal)\n", digitalRead(SW) ? "HIGH" : "LOW");
   attachInterrupt(digitalPinToInterrupt(SW), onHit, CHANGE);
 }
 
@@ -51,9 +52,8 @@ bool inEvent = false;
 String lastLine = "bekleniyor";
 
 void loop() {
-  noInterrupts();
+  // 32-bit reads are atomic on the ESP32, no need to pause interrupts.
   unsigned long h = hits, lastMs = lastHitMs;
-  interrupts();
   unsigned long now = millis();
 
   if (!inEvent && h > eventStartHits) {
