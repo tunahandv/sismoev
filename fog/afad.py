@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 import requests
 
-API = "https://deprem.afad.gov.tr/apiv2/event/filter"
+API = "https://servisnet.afad.gov.tr/apigateway/deprem/apiv2/event/filter"
 HOME_LAT = float(os.getenv("HOME_LAT", "38.49"))
 HOME_LON = float(os.getenv("HOME_LON", "27.70"))
 RADIUS_KM = float(os.getenv("AFAD_RADIUS_KM", "200"))
