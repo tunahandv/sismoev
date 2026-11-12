@@ -33,7 +33,10 @@ void setup() {
   Wire.begin(21, 22);
   scanI2C();
 
-  oledOk = oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  // begin() does not check that the screen answers, so ask the bus first.
+  Wire.beginTransmission(0x3C);
+  bool present = Wire.endTransmission() == 0;
+  oledOk = present && oled.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   Serial.println(oledOk ? "OLED OK" : "OLED NOT FOUND (check wires / address)");
 
   pinMode(SW, INPUT_PULLUP);
