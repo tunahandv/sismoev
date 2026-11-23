@@ -6,7 +6,9 @@ All grounds are common. 3V3 = ESP32 3.3 V output. 5V = UPS holder output rail.
 |---|---|---|---|
 | I2C SDA | GPIO21 | MPU6050, ADXL345, OLED (shared) | |
 | I2C SCL | GPIO22 | MPU6050, ADXL345, OLED (shared) | |
-| MPU6050 | I2C 0x68 | VCC→3V3, GND, AD0→GND | screw tight to the board |
+| MPU6050 #1 | I2C 0x68 | VCC→3V3, GND, AD0→GND | screw tight to the board |
+| MPU6050 #2 | I2C 0x69 | VCC→3V3, GND, **AD0→3V3** | second accelerometer, same orientation as #1 |
+| Piezo vibration sensor (Gravity, analog) | GPIO34 (ADC1) | VCC→3V3, GND, signal→GPIO34 | vibration strength; planned |
 | ADXL345 (GY-291) | I2C 0x53 | VCC→3V3, GND, **CS→3V3**, **SDO→GND** | CS must be high for I2C mode |
 | OLED SSD1306 | I2C 0x3C | VCC→3V3, GND | |
 | MPU6050 INT | GPIO19 | optional | |
@@ -22,7 +24,7 @@ All grounds are common. 3V3 = ESP32 3.3 V output. 5V = UPS holder output rail.
 | Button: test mode | GPIO33 | other leg → GND | `INPUT_PULLUP` |
 | Button: mute | GPIO14 | other leg → GND | `INPUT_PULLUP` |
 | Mains detect | GPIO35 (ADC1) | charger 5V → 10 kΩ → pin → 20 kΩ → GND | 20 kΩ = two 10 kΩ in series |
-| Relay-state feedback | GPIO34 (ADC1) | relay NO → 10 kΩ → pin → 20 kΩ → GND | |
+| Relay-state feedback | GPIO39 (ADC1) | relay NO → 10 kΩ → pin → 20 kΩ → GND | |
 | Battery voltage | GPIO36 (ADC1) | 18650 (+) → 10 kΩ → pin → 20 kΩ → GND | optional |
 
 Why a MOSFET in front of the relay: the relay module is low-level triggered and powered from 5 V.
