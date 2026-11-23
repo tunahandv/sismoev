@@ -35,6 +35,7 @@ struct Track {
   float base[3] = {0, 0, 0};   // slow average = gravity + tilt
   bool primed = false;
   float peak = 0;
+  int samples = 0, zeroSamples = 0;   // to tell if the sensor kept sending data
   int crossX = 0, crossY = 0;
   int signX = 0, signY = 0;
 };
@@ -49,12 +50,21 @@ float readDyn(int i, float &dx, float &dy) {
   sensors_event_t a, g, t;
   mpu[i].getEvent(&a, &g, &t);
   float v[3] = {a.acceleration.x, a.acceleration.y, a.acceleration.z};
-  // A sensor that lost its wires reads exactly 0 on every axis.
+  // A sensor that lost its wires keeps returning the very same numbers (or all zeros);
+  // a working one always changes in the last digits because of noise.
+  static float prev[2][3];
+  static int sameRun[2] = {0, 0};
+  bool same = (v[0] == prev[i][0] && v[1] == prev[i][1] && v[2] == prev[i][2]);
+  for (int j = 0; j < 3; j++) prev[i][j] = v[j];
+  sameRun[i] = same ? sameRun[i] + 1 : 0;
+  bool stuck = sameRun[i] >= 5;
   static unsigned long lastWarn[2] = {0, 0};
-  if (v[0] == 0 && v[1] == 0 && v[2] == 0 && millis() - lastWarn[i] > 2000) {
+  if (stuck && millis() - lastWarn[i] > 2000) {
     Serial.printf("UYARI: MPU #%d veri vermiyor - kablolarini kontrol et\n", i + 1);
     lastWarn[i] = millis();
   }
+  if (inEvent) { tr[i].samples++; if (stuck) tr[i].zeroSamples++; }
+  if (stuck) { dx = dy = 0; return 0; }   // ignore a dead sensor instead of reading its stale numbers
   Track &k = tr[i];
   if (!k.primed) { for (int j = 0; j < 3; j++) k.base[j] = v[j]; k.primed = true; }
   float d[3];
@@ -74,7 +84,7 @@ void countCross(int &sign, int &count, float val, float peak) {
 
 void resetTracks() {
   for (int i = 0; i < 2; i++) {
-    tr[i].peak = 0; tr[i].crossX = tr[i].crossY = 0; tr[i].signX = tr[i].signY = 0;
+    tr[i].peak = 0; tr[i].samples = tr[i].zeroSamples = 0; tr[i].crossX = tr[i].crossY = 0; tr[i].signX = tr[i].signY = 0;
   }
   swFired = false;
 }
@@ -86,15 +96,30 @@ void finishEvent(unsigned long now) {
   float hz[2];
   for (int i = 0; i < 2; i++) hz[i] = max(tr[i].crossX, tr[i].crossY) / 2.0f / secs;
 
+  // Only sensors that kept sending data during the event take part in the decision.
+  bool alive[2];
+  int nAlive = 0;
+  for (int i = 0; i < 2; i++) {
+    alive[i] = ok[i] && tr[i].samples > 0 && tr[i].zeroSamples * 2 < tr[i].samples;
+    if (alive[i]) nAlive++;
+  }
+  float hzMain = 0, peakAvg = 0;
+  bool bothAgree = true;
+  for (int i = 0; i < 2; i++) if (alive[i]) {
+    hzMain += hz[i] / nAlive;
+    peakAvg += tr[i].peak / nAlive;
+    if (tr[i].peak <= SENSOR_AGREE) bothAgree = false;
+  }
+
   const char *verdict;
-  bool bothAgree = (!ok[0] || tr[0].peak > SENSOR_AGREE) && (!ok[1] || tr[1].peak > SENSOR_AGREE);
-  float hzMain = ok[0] ? hz[0] : hz[1];
-  float peakAvg = (tr[0].peak + tr[1].peak) / ((ok[0] && ok[1]) ? 2 : 1);
-  if (dur < MIN_QUAKE_MS)                       verdict = "SAHTE (kisa darbe)";
+  if (nAlive == 0)                              verdict = "SENSOR YOK (kablolari kontrol et)";
+  else if (dur < MIN_QUAKE_MS)                  verdict = "SAHTE (kisa darbe)";
   else if (hzMain < MIN_HZ || hzMain > MAX_HZ)  verdict = "SAHTE (ritim uymuyor)";
   else if (!bothAgree)                          verdict = "SAHTE (sensorler uyusmuyor)";
   else if (peakAvg >= STRONG_PEAK)              verdict = "DEPREM - GUCLU";
   else                                          verdict = "DEPREM - HAFIF";
+  for (int i = 0; i < 2; i++) if (ok[i] && !alive[i])
+    Serial.printf("  (MPU #%d bu olayda veri vermedi, karara katilmadi)\n", i + 1);
 
   Serial.printf("[%c] Olay %lu | sure %lu ms | tepe M1 %.1f M2 %.1f | ritim M1 %.1f Hz M2 %.1f Hz | anahtar %s | => %s\n",
                 label, eventNo, dur, tr[0].peak, tr[1].peak, hz[0], hz[1], swFired ? "evet" : "hayir", verdict);
