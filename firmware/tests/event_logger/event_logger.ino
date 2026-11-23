@@ -21,7 +21,8 @@ const unsigned long MIN_QUAKE_MS = 1000;  // shorter = knock
 const float MIN_HZ = 0.8, MAX_HZ = 12.0;  // quake-like rhythm
 const float SENSOR_AGREE = 1.0;           // both sensors must peak above this
 const float STRONG_PEAK  = 6.0;           // m/s2: above = strong, below = light
-const float CROSS_HYST   = 0.3;           // m/s2: ignore tiny wiggles when counting rhythm
+const float CROSS_HYST   = 0.3;           // m/s2: minimum wiggle counted when measuring rhythm
+const float CROSS_FRAC   = 0.3;           // ...and at least this share of the event's peak
 
 const int SW = 18;
 Adafruit_MPU6050 mpu[2];
@@ -39,6 +40,8 @@ struct Track {
 };
 Track tr[2];
 
+// Label typed in the Serial Monitor before a trial: g = guclu, h = hafif, v = vurus
+char label = '-';
 bool inEvent = false;
 unsigned long startMs = 0, lastLoudMs = 0, eventNo = 0;
 
@@ -57,8 +60,9 @@ float readDyn(int i, float &dx, float &dy) {
   return sqrtf(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
 }
 
-void countCross(int &sign, int &count, float val) {
-  int s = val > CROSS_HYST ? 1 : (val < -CROSS_HYST ? -1 : 0);
+void countCross(int &sign, int &count, float val, float peak) {
+  float h = max(CROSS_HYST, CROSS_FRAC * peak);
+  int s = val > h ? 1 : (val < -h ? -1 : 0);
   if (s != 0 && s != sign) { if (sign != 0) count++; sign = s; }
 }
 
@@ -86,8 +90,8 @@ void finishEvent(unsigned long now) {
   else if (peakAvg >= STRONG_PEAK)              verdict = "DEPREM - GUCLU";
   else                                          verdict = "DEPREM - HAFIF";
 
-  Serial.printf("Olay %lu | sure %lu ms | tepe M1 %.1f M2 %.1f | ritim M1 %.1f Hz M2 %.1f Hz | anahtar %s | => %s\n",
-                eventNo, dur, tr[0].peak, tr[1].peak, hz[0], hz[1], swFired ? "evet" : "hayir", verdict);
+  Serial.printf("[%c] Olay %lu | sure %lu ms | tepe M1 %.1f M2 %.1f | ritim M1 %.1f Hz M2 %.1f Hz | anahtar %s | => %s\n",
+                label, eventNo, dur, tr[0].peak, tr[1].peak, hz[0], hz[1], swFired ? "evet" : "hayir", verdict);
 }
 
 void setup() {
@@ -104,11 +108,19 @@ void setup() {
   }
   pinMode(SW, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(SW), onSwitch, CHANGE);
-  Serial.println("Hazir. 3 sn dokunma (sensorler oturuyor), sonra salla ya da vur.");
+  Serial.println("Hazir. 3 sn dokunma (sensorler oturuyor).");
+  Serial.println("Her denemeden once etiket yaz + Enter: g = guclu, h = hafif, v = vurus");
   delay(3000);
 }
 
 void loop() {
+  while (Serial.available()) {
+    char c = Serial.read();
+    if (c == 'g' || c == 'h' || c == 'v') {
+      label = c;
+      Serial.printf("Etiket: %s\n", c == 'g' ? "GUCLU sallama" : c == 'h' ? "HAFIF sallama" : "VURUS");
+    }
+  }
   static unsigned long next = millis();
   unsigned long now = millis();
   if ((long)(now - next) < 0) return;
@@ -120,8 +132,8 @@ void loop() {
     m[i] = readDyn(i, dx, dy);
     if (inEvent) {
       tr[i].peak = max(tr[i].peak, m[i]);
-      countCross(tr[i].signX, tr[i].crossX, dx);
-      countCross(tr[i].signY, tr[i].crossY, dy);
+      countCross(tr[i].signX, tr[i].crossX, dx, tr[i].peak);
+      countCross(tr[i].signY, tr[i].crossY, dy, tr[i].peak);
     }
   }
   float loud = max(m[0], m[1]);
