@@ -25,6 +25,8 @@ const float CROSS_HYST   = 0.3;           // m/s2: minimum wiggle counted when m
 const float CROSS_FRAC   = 0.3;           // ...and at least this share of the event's peak
 
 const int SW = 18;
+// Labels can also be set with the buttons: B1 = guclu, B2 = hafif, B3 = vurus (short beep confirms)
+const int BTN_G = 32, BTN_H = 33, BTN_V = 14, BUZZER = 27;
 Adafruit_MPU6050 mpu[2];
 bool ok[2] = {false, false};
 
@@ -137,16 +139,33 @@ void setup() {
     mpu[i].setAccelerometerRange(MPU6050_RANGE_8_G);
     mpu[i].setFilterBandwidth(MPU6050_BAND_44_HZ);
   }
+  pinMode(BTN_G, INPUT_PULLUP); pinMode(BTN_H, INPUT_PULLUP); pinMode(BTN_V, INPUT_PULLUP);
+  pinMode(BUZZER, OUTPUT); digitalWrite(BUZZER, LOW);
+  pinMode(26, OUTPUT); digitalWrite(26, LOW);   // relay off: the fan's own vibration would disturb the readings
   pinMode(SW, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(SW), onSwitch, CHANGE);
   Serial.println("Hazir. 3 sn dokunma (sensorler oturuyor).");
-  Serial.println("Her denemeden once etiket yaz + Enter: g = guclu, h = hafif, v = vurus");
+  Serial.println("Her denemeden once etiket sec: B1 = guclu, B2 = hafif, B3 = vurus");
+  Serial.println("(ya da Seri Monitore g / h / v yazip Enter)");
   delay(3000);
 }
 
 void loop() {
-  while (Serial.available()) {
-    char c = Serial.read();
+  static bool lastBtn[3] = {false, false, false};
+  const int pins[3] = {BTN_G, BTN_H, BTN_V};
+  const char keys[3] = {'g', 'h', 'v'};
+  char pressed = 0;
+  for (int b = 0; b < 3; b++) {
+    bool down = digitalRead(pins[b]) == LOW;
+    if (down && !lastBtn[b]) pressed = keys[b];
+    lastBtn[b] = down;
+  }
+  if (pressed) {
+    digitalWrite(BUZZER, HIGH); delay(60); digitalWrite(BUZZER, LOW);
+  }
+  while (Serial.available() || pressed) {
+    char c = pressed ? pressed : Serial.read();
+    pressed = 0;
     if (c == 'g' || c == 'h' || c == 'v') {
       label = c;
       Serial.printf("Etiket: %s\n", c == 'g' ? "GUCLU sallama" : c == 'h' ? "HAFIF sallama" : "VURUS");
