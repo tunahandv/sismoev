@@ -49,6 +49,12 @@ float readDyn(int i, float &dx, float &dy) {
   sensors_event_t a, g, t;
   mpu[i].getEvent(&a, &g, &t);
   float v[3] = {a.acceleration.x, a.acceleration.y, a.acceleration.z};
+  // A sensor that lost its wires reads exactly 0 on every axis.
+  static unsigned long lastWarn[2] = {0, 0};
+  if (v[0] == 0 && v[1] == 0 && v[2] == 0 && millis() - lastWarn[i] > 2000) {
+    Serial.printf("UYARI: MPU #%d veri vermiyor - kablolarini kontrol et\n", i + 1);
+    lastWarn[i] = millis();
+  }
   Track &k = tr[i];
   if (!k.primed) { for (int j = 0; j < 3; j++) k.base[j] = v[j]; k.primed = true; }
   float d[3];
